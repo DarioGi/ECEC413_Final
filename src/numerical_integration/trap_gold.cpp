@@ -11,8 +11,8 @@ extern "C" double compute_gold(float, float, int, float);
  * Output: (x+1)/sqrt(x*x + x + 1)
 
  */
-float 
-f(float x) {
+float f(float x) 
+{
     return (x + 1)/sqrt(x*x + x + 1);
 }  /* f */
 
