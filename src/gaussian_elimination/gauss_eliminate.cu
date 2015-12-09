@@ -4,11 +4,11 @@
 #include <string.h>
 #include <math.h>
 
-// includes, kernels
 #include "gauss_eliminate_kernel.cu"
 
 #define MIN_NUMBER 2
 #define MAX_NUMBER 50
+
 
 extern "C" int compute_gold(float*, const float*, unsigned int);
 Matrix allocate_matrix_on_gpu(const Matrix M);
@@ -24,8 +24,7 @@ void checkCUDAError(const char *msg);
 int checkResults(float *reference, float *gpu_result, int num_elements, float threshold);
 
 
-int 
-main(int argc, char** argv) 
+int main(int argc, char** argv) 
 {
     // Matrices for the program
 	Matrix  A; // The NxN input matrix
@@ -46,9 +45,12 @@ main(int argc, char** argv)
 
 	// Perform Gaussian elimination on the CPU 
 	Matrix reference = allocate_matrix(MATRIX_SIZE, MATRIX_SIZE, 0);
-
-	int status = compute_gold(reference.elements, A.elements, A.num_rows);
 	
+	struct timeval start, stop;	
+	gettimeofday(&start, NULL);
+	int status = compute_gold(reference.elements, A.elements, A.num_rows);
+	gettimeofday(&stop, NULL);
+	printf("CPU Execution time = %fs. \n", (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
 	if(status == 0){
 		printf("Failed to convert given matrix to upper triangular. Try again. Exiting. \n");
 		exit(0);
@@ -77,8 +79,48 @@ main(int argc, char** argv)
 }
 
 
-void 
-gauss_eliminate_on_device(const Matrix A, Matrix U){
+void gauss_eliminate_on_device(const Matrix A, Matrix U)
+{
+	float* dU = NULL;
+	//int k = 0;
+	//int offset = 0;
+	float* currentRow = NULL;
+	
+	if ( cudaMalloc((void**)&dU, U.num_columns * U.num_rows * sizeof(float)) != cudaSuccess )
+	{
+		printf("Failed allocation.\n");
+		return;
+	}
+	
+	cudaMemcpy(dU, A.elements, U.num_columns * U.num_rows * sizeof(float), cudaMemcpyHostToDevice);
+	//cudaBindTexture(NULL, tU, dU, U.num_columns * U.num_rows * sizeof(float));
+	currentRow = dU;
+	struct timeval start, stop;	
+	gettimeofday(&start, NULL);
+	//while ( k < U.num_rows )
+	//{
+		gauss_eliminate_kernel<<<GRID_SIZE, TILE_SIZE>>>(dU, currentRow, TILE_SIZE*GRID_SIZE);
+		
+		cudaThreadSynchronize();
+		cudaError_t err = cudaGetLastError();
+		if ( cudaSuccess != err ) 
+		{
+			fprintf(stderr, "Kernel execution failed: %s.\n", cudaGetErrorString(err));
+			return;
+		}
+		//k++;
+		//currentRow = &(dU[U.num_rows*k]);
+	//}
+	gettimeofday(&stop, NULL);
+	printf("GPU Execution time = %fs. \n", (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
+	
+	cudaMemcpy(U.elements, dU, U.num_columns * U.num_rows * sizeof(float), cudaMemcpyDeviceToHost);
+	
+	printf("HOST: %f\n", U.elements[0]);
+	cudaFree(dU);
+	//cudaFree(dK);
+	//cudaFree(dOffset);
+	//cudaFree(dCurrentRow);
 }
 
 // Allocate a device matrix of same size as M.
@@ -184,6 +226,7 @@ checkResults(float *reference, float *gpu_result, int num_elements, float thresh
     
     for(int i = 0; i < num_elements; i++)
         if(fabsf((reference[i] - gpu_result[i])/reference[i]) > threshold){
+			printf("Reference:%f, GPU:%f\n, i = %d",reference[i], gpu_result[i], i );
             checkMark = 0;
             break;
         }
