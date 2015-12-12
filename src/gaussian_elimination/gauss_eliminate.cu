@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 
+//texture<float> tU;
 #include "gauss_eliminate_kernel.cu"
 
 #define MIN_NUMBER 2
@@ -82,9 +83,7 @@ int main(int argc, char** argv)
 void gauss_eliminate_on_device(const Matrix A, Matrix U)
 {
 	float* dU = NULL;
-	//int k = 0;
-	//int offset = 0;
-	float* currentRow = NULL;
+	int k = 0;
 	
 	if ( cudaMalloc((void**)&dU, U.num_columns * U.num_rows * sizeof(float)) != cudaSuccess )
 	{
@@ -94,12 +93,11 @@ void gauss_eliminate_on_device(const Matrix A, Matrix U)
 	
 	cudaMemcpy(dU, A.elements, U.num_columns * U.num_rows * sizeof(float), cudaMemcpyHostToDevice);
 	//cudaBindTexture(NULL, tU, dU, U.num_columns * U.num_rows * sizeof(float));
-	currentRow = dU;
 	struct timeval start, stop;	
 	gettimeofday(&start, NULL);
-	//while ( k < U.num_rows )
-	//{
-		gauss_eliminate_kernel<<<GRID_SIZE, TILE_SIZE>>>(dU, currentRow, TILE_SIZE*GRID_SIZE);
+	while ( k < MATRIX_SIZE )
+	{
+		gauss_eliminate_kernel<<<GRID_SIZE, TILE_SIZE>>>(dU, k);
 		
 		cudaThreadSynchronize();
 		cudaError_t err = cudaGetLastError();
@@ -108,14 +106,24 @@ void gauss_eliminate_on_device(const Matrix A, Matrix U)
 			fprintf(stderr, "Kernel execution failed: %s.\n", cudaGetErrorString(err));
 			return;
 		}
-		//k++;
-		//currentRow = &(dU[U.num_rows*k]);
-	//}
+		gauss_eliminate_zeroOut<<<GRID_SIZE, TILE_SIZE>>>(dU, k);
+		cudaThreadSynchronize();
+		err = cudaGetLastError();
+		if ( cudaSuccess != err ) 
+		{
+			fprintf(stderr, "Kernel execution failed: %s.\n", cudaGetErrorString(err));
+			return;
+		}
+		k++;
+	}
 	gettimeofday(&stop, NULL);
 	printf("GPU Execution time = %fs. \n", (float)(stop.tv_sec - start.tv_sec + (stop.tv_usec - start.tv_usec)/(float)1000000));
 	
 	cudaMemcpy(U.elements, dU, U.num_columns * U.num_rows * sizeof(float), cudaMemcpyDeviceToHost);
-	
+	for ( k = 0; k < MATRIX_SIZE; k++)
+	{
+		U.elements[MATRIX_SIZE*k+k] = 1;
+	}
 	printf("HOST: %f\n", U.elements[0]);
 	cudaFree(dU);
 	//cudaFree(dK);
