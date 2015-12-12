@@ -1,14 +1,11 @@
 #ifndef _MATRIXMUL_H_
 #define _MATRIXMUL_H_
 
-// Thread block size
-#define MATRIX_SIZE 512
+#define MATRIX_SIZE 2048
 #define TILE_SIZE 512
-#define GRID_SIZE 4
-
-// Matrix dimensions
-#define NUM_COLUMNS MATRIX_SIZE // Number of columns in Matrix A
-#define NUM_ROWS MATRIX_SIZE // Number of rows in Matrix A
+#define GRID_SIZE 6
+#define NUM_COLUMNS MATRIX_SIZE 
+#define NUM_ROWS MATRIX_SIZE 
 
 // Matrix Structure declaration
 typedef struct {
